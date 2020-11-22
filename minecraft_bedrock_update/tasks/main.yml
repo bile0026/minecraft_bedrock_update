@@ -1,0 +1,63 @@
+---
+# tasks file for minecraft_bedrock_update
+- name: Create temp folders
+  file:
+    state: directory
+    path: "{{ item }}"
+    owner: minecraft
+    group: minecraft
+    mode: "0775"
+  with_items:
+    - /tmp/minecraft
+    - /tmp/minecraft/unpack/
+  become: true
+
+- name: Download Minecraft Bedrock {{ minecraft_version }}
+  get_url:
+    url: https://minecraft.azureedge.net/bin-linux/bedrock-server-{{ minecraft_version }}.zip
+    dest: /tmp/minecraft/
+    mode: "0775"
+
+- name: Unpack Minecraft Bedrock
+  unarchive:
+    src: /tmp/minecraft/bedrock-server-{{ minecraft_version }}.zip
+    dest: /tmp/minecraft/unpack/
+    remote_src: true
+
+- name: Remove custom files
+  file:
+    state: absent
+    path: /tmp/minecraft/unpack/{{ item }}
+  with_items:
+    - server.properties
+    - whitelist.json
+    - permissions.json
+
+- name: Stop {{ minecraft_service_name }} for upgrade
+  service:
+    name: "{{ minecraft_service_name }}"
+    state: stopped
+  become: true
+
+- name: Backup current version
+  archive:
+    path: "{{ minecraft_install_path }}"
+    dest: ~/minecraft_backup_{{ date }}.tar.gz
+    format: gz
+    force_archive: true
+
+- name: Put new Minecraft version into install directory
+  copy:
+    src: /tmp/minecraft/unpack/
+    dest: "{{ minecraft_install_path }}"
+    owner: minecraft
+    group: minecraft
+    remote_src: true
+    force: true
+  become: true
+
+- name: Start minecraft service
+  service:
+    name: "{{ minecraft_service_name }}"
+    state: started
+  become: true
